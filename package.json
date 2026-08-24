@@ -1,0 +1,15 @@
+{
+  "name": "legal-matter-failover-typescript",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/legal_matter_workflow.ts",
+    "test": "tsx --test test/failover_decision.test.ts"
+  },
+  "dependencies": {
+    "openai": "^4.80.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2"
+  }
+}
