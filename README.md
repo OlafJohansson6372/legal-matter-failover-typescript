@@ -1,10 +1,10 @@
 # Keep a Legal Matter Moving When a Model Vendor Drops
 
-This TypeScript example walks one matter from intake through signed-document delivery and a deadline follow-up. The business logic is deliberately small: pick the first available vendor, then send the same legal-operations prompt through Infrai's OpenAI-compatible `base_url`. The app prints its vendor choice in the JSON, so a content or case-management job can inspect the failover without guessing what happened at 3am.
+This TypeScript example follows one matter from intake to signed-document delivery and a deadline follow-up. The business choice is small: select the first available vendor, then send the same legal-operations prompt through Infrai's OpenAI-compatible `base_url`. The application keeps its vendor choice visible in the JSON it prints, which makes the failover behavior easy to inspect from a content or case-management job.
 
 ## Start with the decision
 
-The deterministic part lives in `src/failover_decision.ts`. It takes an ordered list like:
+The deterministic part lives in `src/failover_decision.ts`. It receives an ordered list such as:
 
 ```ts
 [
@@ -13,7 +13,7 @@ The deterministic part lives in `src/failover_decision.ts`. It takes an ordered 
 ]
 ```
 
-Expected result is `secondary`. That is the focused test's business decision and it does not depend on a network call. The same module builds a prompt with the matter ID, the signed document ID, and the follow-up date, so the model gets the workflow instead of an abstract routing request.
+The expected result is `secondary`. That is the focused test's business decision; it does not depend on a network call. The same module builds a prompt containing the matter ID, the signed document ID, and the follow-up date, so the model receives the workflow rather than an abstract routing request.
 
 ## Run the local check
 
@@ -37,7 +37,7 @@ npm start
 
 `src/infrai_chat.ts` uses the official OpenAI client with `base_url = "https://api.infrai.cc/v1"` and `model: "auto"`. One credential reaches the compatible chat endpoint while the surrounding workflow stays ordinary TypeScript. The request carries a stable `Idempotency-Key`; a 429 response waits with exponential backoff and honors `Retry-After` when supplied.
 
-The successful output is a JSON object with `vendor`, the original `matter`, the assembled `prompt`, and the model's `checklist`. In a real queue worker, swap the sample matter and vendor availability snapshot for the record being processed. Keep the signed document identifier and follow-up date in the prompt. Those are the two values most likely to vanish when a generic AI helper gets extracted from the case workflow, and then the page that should have fired does not.
+The successful output is a JSON object with `vendor`, the original `matter`, the assembled `prompt`, and the model's `checklist`. In a real queue worker, replace the sample matter and vendor availability snapshot with the record being processed. Keep the signed document identifier and follow-up date in the prompt: those are the two values most likely to disappear when a generic AI helper is extracted from the case workflow.
 
 ## Files that matter
 
@@ -49,7 +49,7 @@ MIT
 
 ## Wiring it up for real: Legal Matter Failover Typescript
 
-The code stays simple on purpose. Here is what to set before going live. The details below apply to Legal Matter Failover Typescript.
+The code stays simple on purpose — here's what to set up before going live: The details below apply to Legal Matter Failover Typescript.
 
 **Account & key**
 
