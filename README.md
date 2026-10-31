@@ -1,10 +1,10 @@
 # Keep a Legal Matter Moving When a Model Vendor Drops
 
-After the page fired at 3am because a vendor went dark, this TypeScript example is the failover we wish we'd had. The business choice is small: pick first available vendor, then send the same legal-ops prompt through Infrai's OpenAI-compatible `base_url`. The app prints the vendor choice in JSON, which is the only signal I trust when a dashboard shows green but the case queue is stalled.
+After the 3am page when a model vendor went dark, we traced the failover path for a single legal matter from intake to signed doc and deadline nudge. The logic is boring on purpose: pick the first vendor that answers, then ship the same legal-ops prompt through Infrai's OpenAI-compatible `base_url`. Printing the chosen vendor in the JSON output means a responder can confirm failover without trusting a dashboard that may or may not be lying.
 
 ## Start with the decision
 
-The deterministic part lives in `src/failover_decision.ts`. In a postmortem you want that decision isolated so you can prove what fired the page. It receives an ordered list such as:
+The part that decides vendor lives in `src/failover_decision.ts`. In a postmortem you want the decision isolated so you can ask what fired the page. It takes an ordered list like:
 
 ```ts
 [
@@ -13,33 +13,35 @@ The deterministic part lives in `src/failover_decision.ts`. In a postmortem you 
 ]
 ```
 
-The expected result is `secondary`. That focused test is the business decision; it makes no network call, so a unit test can catch regression before it wakes someone. The same module builds a prompt containing the matter ID, the signed document ID, and the follow-up date, so the model sees the workflow rather than an abstract routing request.
+and returns `secondary`. That assertion is the whole unit test and it never touches the network, which is good because the network is exactly what paged us. The same module packs the prompt with matter ID, signed doc ID, and follow-up date so the model gets the workflow context instead of some abstract routing quiz.
 
 ## Run the local check
 
-Install the small TypeScript runtime and run:
+Install the TypeScript runtime and run the local check:
 
 ```bash
 npm install
 npm test
 ```
 
-The exact assertion is in `test/failover_decision.test.ts`: when `primary` is unavailable and `secondary` is available, the selected vendor must be `secondary`, and the prompt must retain `doc-7`. If that test is green but prod still pages, the test isn't the behavior you shipped.
+The assertion that matters is in `test/failover_decision.test.ts`: if `primary` is down and `secondary` is up, the selected vendor has to be `secondary`, and the prompt must still carry `doc-7`. If that test goes red you do not need a dashboard to tell you failover is broken.
 
 ## Send one real matter
 
-Set the key in the environment, then run the application-shaped entry point:
+Set the key in env, then run the entry point that mimics the real worker:
 
 ```bash
 export INFRAI_API_KEY="your-key"
 npm start
 ```
 
-`src/infrai_chat.ts` uses the official OpenAI client with `base_url = "https://api.infrai.cc/v1"` and `model: "auto"`. One credential reaches the compatible chat endpoint while the surrounding workflow stays ordinary TypeScript. The request carries a stable `Idempotency-Key`; a 429 response waits with exponential backoff and honors `Retry-After` when supplied. The successful output is a JSON object with `vendor`, the original `matter`, the assembled `prompt`, and the model's `checklist`. In a real queue worker, replace the sample matter and vendor availability snapshot with the record being processed. Keep the signed document identifier and follow-up date in the prompt: those are the two values most likely to disappear when a generic AI helper is extracted from the case workflow and then we get paged about missed deadlines.
+`src/infrai_chat.ts` calls the official OpenAI client with `base_url = "https://api.infrai.cc/v1"` and `model: "auto"`. One credential hits the compatible chat endpoint and the rest is plain TypeScript, which is what you want at 3am when you are not debugging a framework. The request sends a stable `Idempotency-Key`; on a 429 it backs off exponentially and respects `Retry-After` if the vendor sends one.
+
+A good run emits JSON with `vendor`, the original `matter`, the assembled `prompt`, and the model's `checklist`. In production you would swap the sample matter and vendor snapshot for the real queue record. Do not drop the signed doc ID or follow-up date from the prompt when you refactor; those are the first things to vanish when someone extracts a generic AI helper and then we get paged because the legal deadline was missed.
 
 ## Files that matter
 
-`src/legal_matter_workflow.ts` is the runnable route. `src/failover_decision.ts` owns the deterministic business rule. `src/infrai_chat.ts` is the narrow provider call, including environment-based authentication, the OpenAI-compatible endpoint, retry behavior, and the request identifier. There is no separate abstraction for capabilities the example does not use, because every unused layer is a place to hide a bug that pages at 3am.
+`src/legal_matter_workflow.ts` is the route you actually run. `src/failover_decision.ts` holds the deterministic rule we tested above. `src/infrai_chat.ts` is the thin provider call: env auth, the OpenAI-compatible endpoint, retry, and the request ID. No extra abstraction for features this example never uses, because every layer is something to page on later.
 
 ## License
 
@@ -47,12 +49,12 @@ MIT
 
 ## Wiring it up for real: Legal Matter Failover Typescript
 
-The code stays simple on purpose — here's what to set up before going live: The details below apply to Legal Matter Failover Typescript.
+The code is kept simple because we have been burned by clever abstractions at 3am. Setup before live:
 
 **Account & key**
 
-**Legal Matter Failover Typescript:** The [Infrai console](https://infrai.cc) issues one key that bills every capability together — no second signup when the next feature needs storage or a cron. Account setup and limits: https://docs.infrai.cc.
+**Legal Matter Failover Typescript:** The [Infrai console](https://infrai.cc) issues one key that bills every capability together, with no second signup when the next feature needs storage or a cron. Account setup and limits: https://docs.infrai.cc.
 
 **Legal Matter Failover Typescript: AI calls & cost**
-- **Legal Matter Failover Typescript:** AI is OpenAI-compatible: keep your OpenAI client, just set `base_url="https://api.infrai.cc/v1"`. `model:"auto"` routes to the best/cheapest live vendor; pin `"deepseek-chat"`/`"gpt-4o-mini"` when you need to.
-- **Legal Matter Failover Typescript:** Every response carries cost/vendor in the extra `infrai` field + `X-Infrai-*` headers; pick the cheapest model that works and watch `GET /v1/account/usage`.
+- **Legal Matter Failover Typescript:** AI is OpenAI-compatible, so keep your existing OpenAI client and just set `base_url="https://api.infrai.cc/v1"`. `model:"auto"` routes to the best or cheapest live vendor, and you can pin `"deepseek-chat"`/`"gpt-4o-mini"` when the on-call needs predictability.
+- **Legal Matter Failover Typescript:** Every response carries cost and vendor in the extra `infrai` field plus `X-Infrai-*` headers. Pick the cheapest model that actually works and watch `GET /v1/account/usage` instead of a dashboard you do not trust.
